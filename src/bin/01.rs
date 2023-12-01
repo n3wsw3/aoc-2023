@@ -23,7 +23,7 @@ pub fn part_one(input: &str) -> Option<u32> {
         .sum()
 }
 
-static NUMBERS: [(&str, u32); 18] = [
+const NUMBERS: [(&str, u32); 18] = [
     ("1", 1),
     ("2", 2),
     ("3", 3),
