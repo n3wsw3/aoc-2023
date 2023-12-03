@@ -4,60 +4,21 @@ use itertools::Itertools;
 
 advent_of_code::solution!(3);
 
-fn is_adjacent(map: &Vec<Vec<char>>, i: usize, j: usize) -> bool {
-	(i.saturating_sub(1)..=usize::min(i + 1, map.len() - 1))
-		.flat_map(|k| {
-			(j.saturating_sub(1)..=usize::min(j + 1, map[k].len() - 1)).map(move |l| map[k][l])
-		})
-		.any(|c| !c.is_ascii_digit() && c != '.')
+fn find_adjacent(
+	i: usize,
+	j: usize,
+	row_length: usize,
+	col_length: usize,
+) -> impl Iterator<Item = (usize, usize)> + 'static {
+	let i_range = i.saturating_sub(1)..=usize::min(i + 1, col_length - 1);
+	let j_range = j.saturating_sub(1)..=usize::min(j + 1, row_length - 1);
+	i_range.flat_map(move |k| j_range.clone().map(move |l| (k, l)))
 }
 
-pub fn part_one(input: &str) -> Option<u32> {
-	let map = input
-		.lines()
-		.map(|line| line.chars().collect_vec())
-		.collect_vec();
-
-	let mut num = 0;
-	let mut is_part = false;
-	let mut sum: Vec<u32> = Vec::new();
-	for i in 0..map.len() {
-		for j in 0..map[i].len() {
-			let element = map[i][j];
-			if !element.is_numeric() {
-				continue;
-			}
-
-			num *= 10;
-			num += element.to_digit(10)?;
-
-			if !is_part {
-				is_part |= is_adjacent(&map, i, j);
-			}
-
-			// if next element is not a digit
-			if j + 1 >= map[i].len() || !map[i][j + 1].is_numeric() {
-				if is_part {
-					sum.push(num);
-				}
-				is_part = false;
-				num = 0;
-			}
-		}
-	}
-	Some(sum.iter().sum())
-}
-
-fn find_adjacent_gear(map: &Vec<Vec<char>>, i: usize, j: usize) -> Option<(usize, usize, char)> {
-	(i.saturating_sub(1)..=usize::min(i + 1, map.len() - 1))
-		.flat_map(|k| {
-			(j.saturating_sub(1)..=usize::min(j + 1, map[k].len() - 1))
-				.map(move |l| (k, l, map[k][l]))
-		})
-		.find(|(_, _, c)| !c.is_ascii_digit() && *c == '*')
-}
-
-pub fn part_two(input: &str) -> Option<u32> {
+fn solve<Collect>(input: &str, filter: fn(char) -> bool, collect: Collect) -> Option<u32>
+where
+	Collect: Fn((&(usize, usize), &Vec<u32>)) -> Vec<u32>,
+{
 	let map = input
 		.lines()
 		.map(|line| line.chars().collect_vec())
@@ -76,26 +37,38 @@ pub fn part_two(input: &str) -> Option<u32> {
 			num *= 10;
 			num += element.to_digit(10)?;
 
-			if is_part.is_none() {
-				is_part = find_adjacent_gear(&map, i, j);
-			}
+			is_part = is_part.or(find_adjacent(i, j, map.len(), map[1].len())
+				.map(|(i, j)| ((i, j), map[i][j]))
+				.find(|(_, c)| !c.is_ascii_digit() && filter(*c)));
 
 			// if next element is not a digit
 			if j + 1 >= map[i].len() || !map[i][j + 1].is_numeric() {
-				if is_part.is_some() {
-					let id = (is_part.unwrap().0, is_part.unwrap().1);
-					sum.entry(id).or_default().push(num);
+				if let Some((pos, _)) = is_part {
+					sum.entry(pos).or_default().push(num);
 				}
 				is_part = None;
 				num = 0;
 			}
 		}
 	}
-	Some(
-		sum.iter()
-			.filter(|(_, vec)| vec.len() == 2)
-			.map(|(_, vec)| vec.iter().product::<u32>())
-			.sum(),
+	Some(sum.iter().flat_map(collect).sum::<u32>())
+}
+
+pub fn part_one(input: &str) -> Option<u32> {
+	solve(input, |c| c != '.', |(_, nums)| nums.to_vec())
+}
+
+pub fn part_two(input: &str) -> Option<u32> {
+	solve(
+		input,
+		|c| c == '*',
+		|(_, nums)| {
+			if nums.len() == 2 {
+				vec![nums.iter().product()]
+			} else {
+				vec![]
+			}
+		},
 	)
 }
 
