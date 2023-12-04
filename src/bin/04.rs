@@ -4,24 +4,24 @@ use std::{cell::RefCell, str::FromStr};
 advent_of_code::solution!(4);
 
 struct Game {
-	winning_numbers: Vec<u32>,
-	next_cards: Vec<usize>,
+	id: usize,
+	winning_numbers_count: usize,
 	win_amount: RefCell<Option<u32>>,
 }
 
 impl Game {
 	fn win_amount(&self) -> u32 {
-		self.winning_numbers
-			.iter()
-			.fold(0, |acc, _| if acc == 0 { 1 } else { acc * 2 })
+		if self.winning_numbers_count == 0 {
+			return 0;
+		}
+		2u32.pow(self.winning_numbers_count as u32 - 1)
 	}
 	fn win_cards(&self, games: &Vec<Game>) -> u32 {
 		let mut wins = self.win_amount.borrow_mut();
 		if wins.is_none() {
 			*wins = Some(
-				self.next_cards
-					.iter()
-					.map(|id| games[*id - 1].win_cards(games))
+				(1 + self.id..=self.winning_numbers_count + self.id)
+					.map(|id| games[id - 1].win_cards(games))
 					.sum::<u32>() + 1,
 			);
 		}
@@ -35,9 +35,12 @@ impl FromStr for Game {
 	fn from_str(str: &str) -> Result<Game, String> {
 		// Card 1: 41 48 83 86 17 | 83 86  6 31 17  9 48 53
 		let (card, game) = str.split_once(": ").ok_or("Invalid card")?;
-		let (winning, numbers) = game.split_once(" | ").ok_or("Invalid card")?;
+		let id = card[5..]
+			.trim()
+			.parse::<usize>()
+			.map_err(|_| "Invalid card id")?;
 
-		let id = card[5..].trim().parse::<usize>().unwrap();
+		let (winning, numbers) = game.split_once(" | ").ok_or("Invalid card numbers")?;
 
 		let winning = winning
 			.split(' ')
@@ -46,18 +49,16 @@ impl FromStr for Game {
 			.sorted()
 			.collect_vec();
 
-		let numbers = numbers
+		let winning_numbers_count = numbers
 			.split(' ')
 			.filter(|s| !s.is_empty())
 			.map(|s| s.parse::<u32>().unwrap())
 			.filter(|n| winning.binary_search(n).is_ok())
-			.collect::<Vec<_>>();
-
-		let wins = numbers.len();
+			.count();
 
 		Ok(Game {
-			winning_numbers: numbers,
-			next_cards: (1 + id..=wins + id).collect(),
+			id,
+			winning_numbers_count,
 			win_amount: RefCell::new(None),
 		})
 	}
