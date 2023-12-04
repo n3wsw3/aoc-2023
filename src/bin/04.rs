@@ -1,12 +1,12 @@
 use itertools::Itertools;
-use std::str::FromStr;
+use std::{cell::RefCell, str::FromStr};
 
 advent_of_code::solution!(4);
 
 struct Game {
-	id: usize,
 	winning_numbers: Vec<u32>,
 	next_cards: Vec<usize>,
+	win_amount: RefCell<Option<u32>>,
 }
 
 impl Game {
@@ -15,8 +15,17 @@ impl Game {
 			.iter()
 			.fold(0, |acc, _| if acc == 0 { 1 } else { acc * 2 })
 	}
-	fn win_cards(&self) -> Vec<usize> {
-		self.next_cards.clone()
+	fn win_cards(&self, games: &Vec<Game>) -> u32 {
+		let mut wins = self.win_amount.borrow_mut();
+		if wins.is_none() {
+			*wins = Some(
+				self.next_cards
+					.iter()
+					.map(|id| games[*id - 1].win_cards(games))
+					.sum::<u32>() + 1,
+			);
+		}
+		wins.unwrap()
 	}
 }
 
@@ -47,9 +56,9 @@ impl FromStr for Game {
 		let wins = numbers.len();
 
 		Ok(Game {
-			id,
 			winning_numbers: numbers,
 			next_cards: (1 + id..=wins + id).collect(),
+			win_amount: RefCell::new(None),
 		})
 	}
 }
@@ -70,18 +79,7 @@ pub fn part_two(input: &str) -> Option<u32> {
 		.map(|line| line.parse::<Game>().unwrap())
 		.collect();
 
-	let mut ids = games.iter().map(|game| game.id).collect_vec();
-
-	let mut i = 0;
-	while i < ids.len() {
-		let id = ids[i];
-		let game = &games[id - 1];
-
-		ids.append(&mut game.win_cards());
-		i += 1;
-	}
-
-	Some(ids.len() as u32)
+	Some(games.iter().map(|game| game.win_cards(&games)).sum())
 }
 
 #[cfg(test)]
