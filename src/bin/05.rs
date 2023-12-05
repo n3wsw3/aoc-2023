@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use itertools::Itertools;
 use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelBridge;
 use rayon::iter::ParallelIterator;
+use rayon::slice::ParallelSlice;
 
 advent_of_code::solution!(5);
 
@@ -38,7 +38,8 @@ impl FromStr for Range {
 		let (destination, start, length) = s
 			.split(' ')
 			.map(|num| num.parse::<u32>().unwrap())
-			.collect_tuple::<(_, _, _)>().unwrap();
+			.collect_tuple::<(_, _, _)>()
+			.unwrap();
 		Ok(Range::new(destination, start, length))
 	}
 }
@@ -81,25 +82,33 @@ struct Game {
 }
 
 impl Game {
-  fn lowest_seed_location(&self) -> u32 {
-    self.seeds.iter().map(|seed| {
-      self.maps.iter().fold(*seed, |acc, map| {
-        map.map(acc).unwrap_or(acc)
-      })
-    }).min().unwrap()
-  }
+	fn lowest_seed_location(&self) -> u32 {
+		self.seeds
+			.iter()
+			.map(|seed| {
+				self.maps
+					.iter()
+					.fold(*seed, |acc, map| map.map(acc).unwrap_or(acc))
+			})
+			.min()
+			.unwrap()
+	}
 
-  fn lowest_seed_location_range(&self) -> u32 {
-    self.seeds.chunks(2).par_bridge().map(|chunk| {
-      let start = chunk[0];
-      let length = chunk[1];
-      (start..start+length).into_par_iter().map(|num| {
-        self.maps.iter().fold(num, |acc, map| {
-          map.map(acc).unwrap_or(acc)
-        })
-      }).min().unwrap()
-    }).min().unwrap()
-  }
+	fn lowest_seed_location_range(&self) -> u32 {
+		self.seeds
+			.par_chunks(2)
+			.flat_map(|chunk| {
+				let start = chunk[0];
+				let length = chunk[1];
+				(start..start + length).into_par_iter().map(|num| {
+					self.maps
+						.iter()
+						.fold(num, |acc, map| map.map(acc).unwrap_or(acc))
+				})
+			})
+			.min()
+			.unwrap()
+	}
 }
 
 impl FromStr for Game {
@@ -125,11 +134,17 @@ impl FromStr for Game {
 }
 
 pub fn part_one(input: &str) -> Option<u32> {
-	input.parse::<Game>().map(|game| game.lowest_seed_location()).ok()
+	input
+		.parse::<Game>()
+		.map(|game| game.lowest_seed_location())
+		.ok()
 }
 
 pub fn part_two(input: &str) -> Option<u32> {
-  input.parse::<Game>().map(|game| game.lowest_seed_location_range()).ok()
+	input
+		.parse::<Game>()
+		.map(|game| game.lowest_seed_location_range())
+		.ok()
 }
 
 #[cfg(test)]
