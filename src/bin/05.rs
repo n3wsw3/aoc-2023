@@ -1,32 +1,21 @@
 use std::str::FromStr;
 
 use itertools::Itertools;
-use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
-use rayon::slice::ParallelSlice;
 
 advent_of_code::solution!(5);
 
 struct Range {
-	destination: u32,
-	start: u32,
-	length: u32,
+	destination: u64,
+	start: u64,
+	length: u64,
 }
 
 impl Range {
-	fn new(destination: u32, start: u32, length: u32) -> Self {
+	fn new(destination: u64, start: u64, length: u64) -> Self {
 		Self {
 			destination,
 			start,
 			length,
-		}
-	}
-
-	fn map(&self, num: u32) -> Option<u32> {
-		if num >= self.start && num - self.start < self.length {
-			Some(self.destination + (num - self.start))
-		} else {
-			None
 		}
 	}
 }
@@ -37,7 +26,7 @@ impl FromStr for Range {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let (destination, start, length) = s
 			.split(' ')
-			.map(|num| num.parse::<u32>().unwrap())
+			.map(|num| num.parse::<u64>().unwrap())
 			.collect_tuple::<(_, _, _)>()
 			.unwrap();
 		Ok(Range::new(destination, start, length))
@@ -53,13 +42,36 @@ impl Map {
 		Self { ranges }
 	}
 
-	fn map(&self, num: u32) -> Option<u32> {
-		for range in &self.ranges {
-			if let Some(mapped) = range.map(num) {
-				return Some(mapped);
-			}
-		}
-		None
+	fn map(&self, nums: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
+		nums.iter()
+			.flat_map(|num| {
+				let mut result: Vec<(u64, u64)> = Vec::new();
+				let mut added: u64 = num.0;
+				for range in &self.ranges {
+					if added < range.start {
+						let to = u64::min(range.start, num.1);
+						result.push((added, to));
+						added = to;
+					}
+					if added >= range.start && added < range.start + range.length {
+						let to = u64::min(range.start + range.length, num.1);
+						result.push((
+							range.destination + added - range.start,
+							range.destination + to - range.start,
+						));
+						added = to;
+					}
+
+					if added >= num.1 {
+						break;
+					}
+				}
+				if added < num.1 {
+					result.push((added, num.1));
+				}
+				result
+			})
+			.collect_vec()
 	}
 }
 
@@ -71,43 +83,48 @@ impl FromStr for Map {
 		ranges.next();
 		let x = ranges
 			.map(|line| line.parse::<Range>().unwrap())
+			.sorted_by_key(|range| range.start)
 			.collect_vec();
 		Ok(Map::new_with_range(x))
 	}
 }
 
 struct Game {
-	seeds: Vec<u32>,
+	seeds: Vec<u64>,
 	maps: Vec<Map>,
 }
 
 impl Game {
-	fn lowest_seed_location(&self) -> u32 {
-		self.seeds
+	fn lowest_seed_location(&self) -> u64 {
+		let ranges = self.seeds.iter().map(|num| (*num, *num + 1)).collect_vec();
+
+		self.maps
 			.iter()
-			.map(|seed| {
-				self.maps
-					.iter()
-					.fold(*seed, |acc, map| map.map(acc).unwrap_or(acc))
-			})
-			.min()
+			.fold(ranges, |acc, map| map.map(acc))
+			.iter()
+			.min_by_key(|(start, _)| start)
 			.unwrap()
+			.0
 	}
 
-	fn lowest_seed_location_range(&self) -> u32 {
-		self.seeds
-			.par_chunks(2)
-			.flat_map(|chunk| {
+	fn lowest_seed_location_range(&self) -> u64 {
+		let ranges = self
+			.seeds
+			.chunks(2)
+			.map(|chunk| {
 				let start = chunk[0];
 				let length = chunk[1];
-				(start..start + length).into_par_iter().map(|num| {
-					self.maps
-						.iter()
-						.fold(num, |acc, map| map.map(acc).unwrap_or(acc))
-				})
+				(start, start + length)
 			})
-			.min()
+			.collect_vec();
+
+		self.maps
+			.iter()
+			.fold(ranges, |acc, map| map.map(acc))
+			.iter()
+			.min_by_key(|(start, _)| start)
 			.unwrap()
+			.0
 	}
 }
 
@@ -121,7 +138,7 @@ impl FromStr for Game {
 			.map(|line| {
 				line.split(' ')
 					.skip(1)
-					.map(|num| num.parse::<u32>().unwrap())
+					.map(|num| num.parse::<u64>().unwrap())
 			})
 			.unwrap()
 			.collect_vec();
@@ -133,14 +150,14 @@ impl FromStr for Game {
 	}
 }
 
-pub fn part_one(input: &str) -> Option<u32> {
+pub fn part_one(input: &str) -> Option<u64> {
 	input
 		.parse::<Game>()
 		.map(|game| game.lowest_seed_location())
 		.ok()
 }
 
-pub fn part_two(input: &str) -> Option<u32> {
+pub fn part_two(input: &str) -> Option<u64> {
 	input
 		.parse::<Game>()
 		.map(|game| game.lowest_seed_location_range())
